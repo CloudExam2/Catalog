@@ -1,17 +1,17 @@
-from typing import List
-
 from fastapi import FastAPI
-from sqlalchemy.orm import Session
+from database import engine, Base
+from routers import clients, products, addresses
 
-from . import models, database
+# Generate tables (for local dev)
+Base.metadata.create_all(bind=engine)
 
-from .routers import clients, addresses, products
+app = FastAPI(title="Catalog Service")
 
-models.Base.metadata.create_all(bind=database.engine)
-
-app = FastAPI(title="SalesNotes API")
-
-# Include the routers
+# Include Routers
 app.include_router(clients.router)
 app.include_router(products.router)
 app.include_router(addresses.router)
+
+@app.get("/")
+def health_check():
+    return {"status": "healthy", "service": "catalog"}

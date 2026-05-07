@@ -1,35 +1,38 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from .. import schemas, models, repositories
+from .. import models
 from ..database import get_db
+from ..schemas import address as address_schema
 
 router = APIRouter(
     prefix="/addresses",
     tags=["addresses"]
 )
 
-@router.post("/", response_model=schemas.AddressRead)
-def create_address(address: schemas.AddressCreate, db: Session = Depends(get_db)):
-    return repositories.AddressRepository(db).create(address)
-
-
-@router.get("/", response_model=List[schemas.AddressRead])
+@router.get("/", response_model=list[address_schema.AddressRead])
 def list_addresses(db: Session = Depends(get_db)):
-    return repositories.AddressRepository(db).list()
+    return db.query(models.Address).all()
 
+@router.post("/", response_model=address_schema.AddressRead)
+def create_address(address: address_schema.AddressCreate, db: Session = Depends(get_db)):
+    db_address = models.Address(**address.model_dump())
+    db.add(db_address)
+    db.commit()
+    db.refresh(db_address)
+    return db_address
 
-@router.get("/{address_id}", response_model=schemas.AddressRead)
+@router.get("/{address_id}", response_model=address_schema.AddressRead)
 def get_address(address_id: int, db: Session = Depends(get_db)):
-    obj = repositories.AddressRepository(db).get(address_id)
-    if not obj:
+    db_address = db.query(models.Address).filter(models.Address.id == address_id).first()
+    if not db_address:
         raise HTTPException(status_code=404, detail="Address not found")
-    return obj
-
+    return db_address
 
 @router.delete("/{address_id}")
 def delete_address(address_id: int, db: Session = Depends(get_db)):
-    repositories.AddressRepository(db).delete(address_id)
+    db_address = db.query(models.Address).filter(models.Address.id == address_id).first()
+    if not db_address:
+        raise HTTPException(status_code=404, detail="Address not found")
+    db.delete(db_address)
+    db.commit()
     return {"ok": True}
-

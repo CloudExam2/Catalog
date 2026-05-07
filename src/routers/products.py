@@ -1,37 +1,39 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import engine, Base, SessionLocal, get_db
-# from .. import schemas, models, repositories
-
-# Create the tables locally
-Base.metadata.create_all(bind=engine)
+from database import get_db
+from .. import models
+from ..schemas import product as product_schema
 
 router = APIRouter(
     prefix="/products",
     tags=["products"]
 )
 
-@router.post("/", response_model=schemas.ProductRead)
-def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)):
-    return repositories.ProductRepository(db).create(product)
-
-
-@router.get("/", response_model=List[schemas.ProductRead])
+@router.get("/", response_model=list[product_schema.ProductRead])
 def list_products(db: Session = Depends(get_db)):
-    return repositories.ProductRepository(db).list()
+    return db.query(models.Product).all()
 
+@router.post("/", response_model=product_schema.ProductRead)
+def create_product(product: product_schema.ProductCreate, db: Session = Depends(get_db)):
+    # Replaced .dict() with .model_dump() per Pydantic v2
+    new_product = models.Product(**product.model_dump())
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+    return new_product
 
-@router.get("/{product_id}", response_model=schemas.ProductRead)
+@router.get("/{product_id}", response_model=product_schema.ProductRead)
 def get_product(product_id: int, db: Session = Depends(get_db)):
-    obj = repositories.ProductRepository(db).get(product_id)
-    if not obj:
+    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return obj
-
+    return db_product
 
 @router.delete("/{product_id}")
 def delete_product(product_id: int, db: Session = Depends(get_db)):
-    repositories.ProductRepository(db).delete(product_id)
+    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    db.delete(db_product)
+    db.commit()
     return {"ok": True}

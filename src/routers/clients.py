@@ -1,43 +1,54 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from .. import schemas, models, repositories
+from .. import models
 from ..database import get_db
+from ..schemas import client as client_schema
 
 router = APIRouter(
     prefix="/clients",
     tags=["clients"]
 )
 
-@router.get("/", response_model=List[schemas.ClientRead])
+@router.get("/", response_model=list[client_schema.ClientRead])
 def list_clients(db: Session = Depends(get_db)):
-    return repositories.ClientRepository(db).list()
+    return db.query(models.Client).all()
 
+@router.post("/", response_model=client_schema.ClientRead)
+def create_client(client: client_schema.ClientCreate, db: Session = Depends(get_db)):
+    db_client = models.Client(**client.model_dump())
+    db.add(db_client)
+    db.commit()
+    db.refresh(db_client)
+    return db_client
 
-@router.post("/", response_model=schemas.ClientRead)
-def create_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
-    repo = repositories.ClientRepository(db)
-    return repo.create(client)
-
-
-@router.get("/{client_id}", response_model=schemas.ClientRead)
+@router.get("/{client_id}", response_model=client_schema.ClientRead)
 def get_client(client_id: int, db: Session = Depends(get_db)):
-    obj = repositories.ClientRepository(db).get(client_id)
-    if not obj:
+    db_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not db_client:
         raise HTTPException(status_code=404, detail="Client not found")
-    return obj
-
+    return db_client
 
 @router.delete("/{client_id}")
 def delete_client(client_id: int, db: Session = Depends(get_db)):
-    repositories.ClientRepository(db).delete(client_id)
+    db_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not db_client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    db.delete(db_client)
+    db.commit()
     return {"ok": True}
 
-@router.put("/{client_id}", response_model=schemas.ClientRead)
-def update_client(client_id: int, client: schemas.ClientUpdate, db: Session = Depends(get_db)):
-    updated_data = client.model_dump(exclude_unset=True)
-    obj = repositories.ClientRepository(db).update(client_id, updated_data)
-    if not obj:
+@router.put("/{client_id}", response_model=client_schema.ClientRead)
+def update_client(client_id: int, client: client_schema.ClientUpdate, db: Session = Depends(get_db)):
+    db_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not db_client:
         raise HTTPException(status_code=404, detail="Client not found")
-    return obj
+    
+    # Update only the fields provided in the request
+    update_data = client.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_client, key, value)
+    
+    db.add(db_client)
+    db.commit()
+    db.refresh(db_client)
+    return db_client
