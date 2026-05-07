@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from .. import models
-from ..database import get_db
-from ..schemas import address as address_schema
+import models
+from database import get_db
+from schemas import address as address_schema
+from repositories import AddressRepository
 
 router = APIRouter(
     prefix="/addresses",
@@ -15,11 +16,9 @@ def list_addresses(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=address_schema.AddressRead)
 def create_address(address: address_schema.AddressCreate, db: Session = Depends(get_db)):
-    db_address = models.Address(**address.model_dump())
-    db.add(db_address)
-    db.commit()
-    db.refresh(db_address)
-    return db_address
+    repo = AddressRepository(db)
+    # Convert Pydantic to dict here
+    return repo.create(address.model_dump())
 
 @router.get("/{address_id}", response_model=address_schema.AddressRead)
 def get_address(address_id: int, db: Session = Depends(get_db)):
@@ -36,3 +35,10 @@ def delete_address(address_id: int, db: Session = Depends(get_db)):
     db.delete(db_address)
     db.commit()
     return {"ok": True}
+
+@router.put("/{address_id}", response_model=address_schema.AddressRead)
+def update_address(address_id: int, address: address_schema.AddressUpdate, db: Session = Depends(get_db)):
+    repo = AddressRepository(db)
+    # Only send fields that were actually sent in the request
+    update_data = address.model_dump(exclude_unset=True)
+    return repo.update(address_id, update_data)

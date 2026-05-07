@@ -1,9 +1,9 @@
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 
 class ClientBase(BaseModel):
-    rfc: str
+    rfc: str = Field(..., min_length=12, max_length=13)
     razon_social: str
     email: str
     comercial_name: Optional[str] = None

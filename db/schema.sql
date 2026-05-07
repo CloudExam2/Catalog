@@ -23,7 +23,7 @@ CREATE TABLE addresses (
     colonia VARCHAR(100),
     municipio VARCHAR(100),
     estado VARCHAR(100),
-    address_type VARCHAR(20),
+    CONSTRAINT chk_address_type CHECK (address_type IN ('FACTURACIÓN', 'ENVÍO')),
     CONSTRAINT fk_client_address FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
 );
 

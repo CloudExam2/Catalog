@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import models
 from database import get_db
-from .. import models
-from ..schemas import product as product_schema
+from schemas import product as product_schema
+from repositories import ProductRepository
 
 router = APIRouter(
     prefix="/products",
@@ -15,12 +16,9 @@ def list_products(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=product_schema.ProductRead)
 def create_product(product: product_schema.ProductCreate, db: Session = Depends(get_db)):
-    # Replaced .dict() with .model_dump() per Pydantic v2
-    new_product = models.Product(**product.model_dump())
-    db.add(new_product)
-    db.commit()
-    db.refresh(new_product)
-    return new_product
+    repo = ProductRepository(db)
+    # Convert Pydantic to dict here
+    return repo.create(product.model_dump())
 
 @router.get("/{product_id}", response_model=product_schema.ProductRead)
 def get_product(product_id: int, db: Session = Depends(get_db)):
@@ -37,3 +35,10 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     db.delete(db_product)
     db.commit()
     return {"ok": True}
+
+@router.put("/{product_id}", response_model=product_schema.ProductRead)
+def update_product(product_id: int, product: product_schema.ProductUpdate, db: Session = Depends(get_db)):
+    repo = ProductRepository(db)
+    # Only send fields that were actually sent in the request
+    update_data = product.model_dump(exclude_unset=True)
+    return repo.update(product_id, update_data)

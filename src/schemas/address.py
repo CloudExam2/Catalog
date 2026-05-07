@@ -1,12 +1,17 @@
+from enum import Enum
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
+
+class AddressType(str, Enum):
+    FACTURACION = "FACTURACIÓN"
+    ENVIO = "ENVÍO"
     
 class AddressBase(BaseModel):
     domicilio: str
     colonia: Optional[str] = None
     municipio: Optional[str] = None
     estado: Optional[str] = None
-    address_type: Optional[str] = None
+    address_type: AddressType
 
 
 class AddressCreate(AddressBase):
