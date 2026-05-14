@@ -70,7 +70,7 @@ jobs:
 
       - name: Build and Push
         run: |
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest .
+          docker build --no-cache -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest .
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
       - name: Update EC2 via SSM
@@ -82,6 +82,8 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --instance-ids "$INSTANCE_ID" \
             --parameters 'commands=[
+              "docker system prune -af || true",
+              "docker image prune -af || true",
               "docker stop catalog-app || true",
               "docker rm catalog-app || true",
               "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}",
@@ -89,6 +91,7 @@ jobs:
               "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"sqlite:////tmp/catalog.db\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
               "sleep 10",
               "docker ps -a",
+              "docker logs catalog-app --tail 50 || true",
               "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app && exit 1)"
             ]' \
             --region ${{ env.AWS_REGION }} \
