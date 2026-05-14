@@ -1,9 +1,13 @@
+import os
 import requests
-import pytest
 
-# Replace with your API Gateway URL or EC2 Public IP
-BASE_URL = "http://54.81.167.105" 
-ENDPOINT = f"{BASE_URL}/catalog" # Adjust based on your API Gateway stage/path
+# Use the environment variable passed from the YAML
+BASE_URL = os.getenv("BASE_URL") 
+# Fallback for local testing only
+if not BASE_URL:
+    BASE_URL = "http://54.81.167.105" 
+
+ENDPOINT = f"{BASE_URL}/catalog"
 
 def test_catalog_persistence():
     payloads = [
