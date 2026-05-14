@@ -1,4 +1,4 @@
-resource "aws_db_subnet_group" "catalogsvc" {
+resource "aws_db_subnet_group" "catalog" {
   name       = "catalog-db-subnet"
   subnet_ids = data.aws_subnets.default.ids
 
@@ -7,7 +7,7 @@ resource "aws_db_subnet_group" "catalogsvc" {
   }
 }
 
-resource "aws_db_instance" "catalogsvc" {
+resource "aws_db_instance" "catalog" {
   identifier                 = "catalog-postgres"
   engine                     = "postgres"
   engine_version             = "16"
