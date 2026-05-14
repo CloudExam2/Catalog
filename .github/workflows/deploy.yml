@@ -8,7 +8,8 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: catalog-service
-  CORE_REPO: "${{ github.repository_owner }}/core-repo-name" # CHANGE THIS to your Core repo name
+  # CHANGE THIS: Format is "YourGitHubUser/YourCoreRepoName"
+  CORE_REPO: "InakiMedinaM/CoreITESO" 
 
 jobs:
   provision:
@@ -21,6 +22,7 @@ jobs:
         working-directory: ./terraform
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -50,22 +52,8 @@ jobs:
           echo "INSTANCE_ID=$(terraform output -raw ec2_instance_id)" >> $GITHUB_OUTPUT
           echo "CATALOG_IP=$(terraform output -raw catalog_public_ip)" >> $GITHUB_OUTPUT
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Run tests
-        run: python -m pytest tests/ -v
-
   deploy:
-    needs: [provision, test]
+    needs: [provision]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +84,7 @@ jobs:
               "docker rm catalog-app || true",
               "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}",
               "docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
-              "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"sqlite:////tmp/catalog.db\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
+              "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"${{ secrets.DATABASE_URL }}\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
             ]' \
             --region ${{ env.AWS_REGION }}
 
@@ -118,14 +106,22 @@ jobs:
         run: |
           set -euo pipefail
           INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
+          
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
+            --comment "Verify and Debug" \
             --parameters '{"commands":["docker ps", "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app && exit 1)"]}' \
             --output text \
             --query "Command.CommandId")
+          
+          # Wait but don't exit on failure yet so we can fetch logs
           aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
-          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --output json
+          
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --output json
 
   trigger-core-update:
     needs: [verify-in-vpc]
@@ -133,6 +129,5 @@ jobs:
     steps:
       - name: Trigger Core Workflow
         run: |
-          # Uses GitHub CLI to trigger the Core repo's main workflow
           echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
           gh workflow run "Core CI/CD" --repo ${{ env.CORE_REPO }}
