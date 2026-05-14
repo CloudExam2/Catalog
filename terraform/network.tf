@@ -30,7 +30,7 @@ resource "aws_security_group" "catalog_ec2" {
 
 resource "aws_security_group" "catalog_rds" {
   name        = "catalog-service-rds-sg"
-  description = "PostgreSQL for Catalog — only from Catalog EC2"
+  description = "PostgreSQL for Catalog - ingress only from Catalog EC2 SG"
 
   ingress {
     from_port       = 5432
