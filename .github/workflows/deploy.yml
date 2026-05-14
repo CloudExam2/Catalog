@@ -1,7 +1,6 @@
 name: Catalog Service CI/CD
 
 on:
-  # Actions → Catalog Service CI/CD → "Run workflow" (branch dropdown = target ref)
   workflow_dispatch:
   push:
     branches: [main]
@@ -9,18 +8,19 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: catalog-service
+  CORE_REPO: "${{ github.repository_owner }}/core-repo-name" # CHANGE THIS to your Core repo name
 
 jobs:
   provision:
     runs-on: ubuntu-latest
     outputs:
-      ec2_instance_id: ${{ steps.set-id.outputs.INSTANCE_ID }}
+      ec2_instance_id: ${{ steps.set-outputs.outputs.INSTANCE_ID }}
+      catalog_public_ip: ${{ steps.set-outputs.outputs.CATALOG_IP }}
     defaults:
       run:
         working-directory: ./terraform
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -44,9 +44,11 @@ jobs:
           TF_VAR_github_token: ${{ secrets.GH_PAT }}
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
 
-      - name: Export EC2 ID
-        id: set-id
-        run: echo "INSTANCE_ID=$(terraform output -raw ec2_instance_id)" >> $GITHUB_OUTPUT
+      - name: Export Infrastructure Data
+        id: set-outputs
+        run: |
+          echo "INSTANCE_ID=$(terraform output -raw ec2_instance_id)" >> $GITHUB_OUTPUT
+          echo "CATALOG_IP=$(terraform output -raw catalog_public_ip)" >> $GITHUB_OUTPUT
 
   test:
     runs-on: ubuntu-latest
@@ -63,7 +65,7 @@ jobs:
         run: python -m pytest tests/ -v
 
   deploy:
-    needs: [provision]
+    needs: [provision, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,11 +85,10 @@ jobs:
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest .
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
-      - name: Update EC2 via SSM (Synchronous)
+      - name: Update EC2 via SSM
         run: |
           INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
-          # We send the command and capture the ID
-          CMD_ID=$(aws ssm send-command \
+          aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --instance-ids "$INSTANCE_ID" \
             --parameters 'commands=[
@@ -97,11 +98,7 @@ jobs:
               "docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
               "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"sqlite:////tmp/catalog.db\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
             ]' \
-            --region ${{ env.AWS_REGION }} \
-            --output text --query "Command.CommandId")
-          
-          echo "Waiting for Docker deployment to finish..."
-          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
+            --region ${{ env.AWS_REGION }}
 
   verify-in-vpc:
     needs: [provision, deploy]
@@ -121,22 +118,21 @@ jobs:
         run: |
           set -euo pipefail
           INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
-          
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Verify and Debug" \
             --parameters '{"commands":["docker ps", "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app && exit 1)"]}' \
             --output text \
             --query "Command.CommandId")
-          
-          echo "Waiting for command $CMD_ID to finish..."
-          # The '|| true' prevents the runner from dying here so you can see the logs below
           aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
-          
-          echo "--- EXECUTION OUTPUT ---"
-          aws ssm get-command-invocation \
-            --command-id "$CMD_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
-            --output json
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --output json
+
+  trigger-core-update:
+    needs: [verify-in-vpc]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Core Workflow
+        run: |
+          # Uses GitHub CLI to trigger the Core repo's main workflow
+          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
+          gh workflow run "Core CI/CD" --repo ${{ env.CORE_REPO }}
