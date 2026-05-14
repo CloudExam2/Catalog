@@ -40,3 +40,9 @@ variable "db_password" {
     error_message = "RDS master password cannot contain /, @, a double-quote character, or spaces (AWS requirement for PostgreSQL)."
   }
 }
+
+variable "catalog_backend_url" {
+  description = "The URL for the Catalog backend service (e.g., http://IP:80). Set this to the Catalog EC2 instance's public IP after deployment. This is used by Core to proxy requests to Catalog."
+  type        = string
+  default     = ""
+}

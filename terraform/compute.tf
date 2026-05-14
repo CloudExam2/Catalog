@@ -31,8 +31,8 @@ resource "github_actions_secret" "ec2_instance_id" {
   plaintext_value = aws_instance.catalog_service.id
 }
 
-resource "github_actions_secret" "database_url" {
-  repository      = var.github_repo
-  secret_name     = "DATABASE_URL"
-  plaintext_value = "postgresql://catalogadmin:${var.db_password}@${aws_db_instance.catalog.address}:5432/catalogsvc"
+resource "github_actions_variable" "catalog_url_for_core" {
+  repository    = "CoreITESO" # Replace with your actual Core repository name
+  variable_name = "CATALOG_BACKEND_URL"
+  value         = "http://${aws_instance.catalog_service.public_ip}:80"
 }
