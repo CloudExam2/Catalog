@@ -100,10 +100,11 @@ jobs:
             --command-id "$COMMAND_ID" \
             --instance-id "$INSTANCE_ID" \
            --region ${{ env.AWS_REGION }}
-            - name: Verify Catalog public endpoint
-              run: |
-                sleep 10
-                curl -fsS --max-time 10 http://${{ needs.provision.outputs.catalog_public_ip }}/
+      
+      - name: Verify Catalog public endpoint
+        run: |
+          sleep 10
+          curl -fsS --max-time 10 http://${{ needs.provision.outputs.catalog_public_ip }}/
 
   verify-in-vpc:
     needs: [provision, deploy]
