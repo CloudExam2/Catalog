@@ -3,7 +3,7 @@ data "terraform_remote_state" "core" {
   backend = "s3"
 
   config = {
-    bucket = "iteso-terraform-state-inaki-99"
+    bucket = "iteso-terraform-state-inaki-69"
     key    = "core/terraform.tfstate"
     region = var.aws_region
   }

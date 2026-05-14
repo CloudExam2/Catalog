@@ -6,17 +6,17 @@ This document describes the **intended production architecture**. Some pieces (T
 
 ## AWS student lab constraint
 
-**Outbound internet from workloads:** Student lab accounts often **do not allow** application instances to reach the **public internet** for arbitrary traffic (generic HTTP/HTTPS egress, public package indexes, Docker Hub at runtime, etc.). Treat the lab as **private-by-default**: use **VPC endpoints** (or other AWS-documented private integration) for **ECR, SSM, S3, SQS**, and similar, unless your instructor explicitly permits open egress.
+**Internet / VPC:** Core now provisions an **Internet Gateway** and **public route** so EC2 can use the public internet when your account allows it. Security groups in this repo may use **`0.0.0.0/0`** for lab convenience (tighten for production).
 
-**Internet Gateway (optional in Core):** Core’s `vpc.tf` keeps the **IGW and default route commented out** by default. **VPC interface endpoints** (see Core `vpc_endpoints.tf`) provide **PrivateLink-style** access to **ECR, SSM, and S3** inside the VPC. Your laptop **cannot** rely on **`http://<public-EC2-IP>/`** the same way as on the open internet without an IGW route; use **SSM port forwarding** or **API Gateway** when you add that path.
+**API Gateway:** Core’s **`gateway.tf`** exposes a **regional** REST API. After your Catalog EC2 has a URL, set the Core variable **`CATALOG_BACKEND_URL`** (e.g. `http://1.2.3.4:80`) and re-apply Core so **`/catalog/{proxy+}`** proxies to Catalog. You can still use **`http://<EC2-public-ip>/`** directly while the SG allows your source CIDR.
 
-### How to hit the Catalog API from your laptop (no IGW)
+**First-time AWS setup:** If the **S3 state bucket** is missing, use **Core** `docs/bootstrap-lab.md` (CLI commands).
 
-1. AWS CLI configured, instance registered with SSM.
-2. `aws ssm start-session --target <instance-id> --document-name AWS-StartPortForwardingSession --parameters '{"portNumber":["80"],"localPortNumber":["8080"]}'`
-3. Open `http://localhost:8080/` in the browser.
+### Optional: SSM port forwarding
 
-The Catalog CI job **Verify app via SSM** only checks **`curl` on the instance** (inside the VPC); it does **not** prove your home PC can reach PrivateLink, because GitHub’s runner is not in your VPC.
+If you later lock down public ingress, you can still reach the app with **Session Manager** port forwarding; see the AWS SSM Session Manager docs.
+
+The Catalog CI job **verify-in-vpc** runs **`curl` on the instance via SSM** (automation health check); it does not validate a browser path from your PC.
 
 ---
 

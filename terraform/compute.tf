@@ -1,5 +1,5 @@
 resource "aws_instance" "catalog_service" {
-  ami                    = data.aws_ssm_parameter.ecs_optimized_ami.value
+  ami                    = "ami-0440d3b780d96b29d" # Amazon Linux 2023 (us-east-1)
   instance_type          = "t2.micro"
   subnet_id              = data.terraform_remote_state.core.outputs.public_subnet_ids[0]
   iam_instance_profile   = "LabInstanceProfile"
@@ -8,6 +8,8 @@ resource "aws_instance" "catalog_service" {
   user_data = <<-EOF
               #!/bin/bash
               set -e
+              dnf update -y
+              dnf install -y docker
               systemctl enable --now docker
               ACCOUNT_ID=${data.aws_caller_identity.current.account_id}
               aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.${var.aws_region}.amazonaws.com
@@ -22,6 +24,7 @@ resource "aws_instance" "catalog_service" {
     Name = "Catalog-Service"
   }
 }
+
 resource "github_actions_secret" "ec2_instance_id" {
   repository      = var.github_repo
   secret_name     = "EC2_INSTANCE_ID"
