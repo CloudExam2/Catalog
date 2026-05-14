@@ -76,7 +76,8 @@ jobs:
       - name: Update EC2 via SSM
         run: |
           INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
-          aws ssm send-command \
+    
+          COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --instance-ids "$INSTANCE_ID" \
             --parameters 'commands=[
@@ -89,12 +90,20 @@ jobs:
               "docker ps -a",
               "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app && exit 1)"
             ]' \
-            --region ${{ env.AWS_REGION }}
+            --region ${{ env.AWS_REGION }} \
+            --query "Command.CommandId" \
+            --output text)
 
-      - name: Verify Catalog public endpoint
-        run: |
-          sleep 10
-          curl -fsS --max-time 10 http://${{ needs.provision.outputs.catalog_public_ip }}/
+          echo "Command ID: $COMMAND_ID. Waiting for execution to complete..."
+    
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+           --region ${{ env.AWS_REGION }}
+            - name: Verify Catalog public endpoint
+              run: |
+                sleep 10
+                curl -fsS --max-time 10 http://${{ needs.provision.outputs.catalog_public_ip }}/
 
   verify-in-vpc:
     needs: [provision, deploy]
