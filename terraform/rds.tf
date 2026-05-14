@@ -15,7 +15,8 @@ resource "aws_db_instance" "catalog" {
   allocated_storage          = 20
   max_allocated_storage      = 50
   storage_type               = "gp3"
-  db_name                    = "catalog"
+  # "catalog" is reserved by RDS for PostgreSQL; use a distinct initial DB name.
+  db_name                    = "catalogsvc"
   username                   = "catalogadmin"
   password                   = var.db_password
   db_subnet_group_name       = aws_db_subnet_group.catalog.name
