@@ -2,34 +2,67 @@ name: Catalog Service CI/CD
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: catalog-service
 
 jobs:
-  infrastructure:
+  provision:
     runs-on: ubuntu-latest
+    outputs:
+      ec2_instance_id: ${{ steps.set-id.outputs.INSTANCE_ID }}
+    defaults:
+      run:
+        working-directory: ./terraform
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
+          terraform_version: "1.7.0"
           terraform_wrapper: false
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Terraform Apply
-        working-directory: ./terraform
+
+      - name: Terraform Init & Apply
         run: |
           terraform init
-          terraform apply -auto-approve -var="db_password=${{ secrets.DB_PASSWORD }}"
+          terraform apply -auto-approve
+        env:
+          TF_VAR_github_owner: ${{ github.repository_owner }}
+          TF_VAR_github_repo: ${{ github.event.repository.name }}
+          TF_VAR_github_token: ${{ secrets.GH_PAT }}
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+
+      - name: Export EC2 ID
+        id: set-id
+        run: echo "INSTANCE_ID=$(terraform output -raw ec2_instance_id)" >> $GITHUB_OUTPUT
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        run: python -m pytest tests/ -v
 
   deploy:
-    needs: infrastructure
+    needs: [provision, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,10 +72,26 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Login to ECR
+
+      - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
       - name: Build and Push
         run: |
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest .
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: Update EC2 via SSM
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "${{ needs.provision.outputs.ec2_instance_id }}" \
+            --parameters 'commands=[
+              "docker stop catalog-app || true",
+              "docker rm catalog-app || true",
+              "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}",
+              "docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
+              "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"${{ secrets.CATALOG_DATABASE_URL }}\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
+            ]' \
+            --region ${{ env.AWS_REGION }}
