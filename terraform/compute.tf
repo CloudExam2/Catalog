@@ -32,6 +32,7 @@ resource "github_actions_secret" "ec2_instance_id" {
 }
 
 resource "github_actions_variable" "catalog_url_for_core" {
+  provider      = github.core
   repository    = "CoreRepo"
   variable_name = "CATALOG_BACKEND_URL"
   value         = "http://${aws_instance.catalog_service.public_ip}:80"

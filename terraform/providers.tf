@@ -25,3 +25,9 @@ provider "github" {
   token = var.github_token
   owner = var.github_owner
 }
+
+provider "github" {
+  alias = "core"
+  token = var.github_token
+  owner = "CloudExam2"
+}
