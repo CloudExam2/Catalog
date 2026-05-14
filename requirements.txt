@@ -16,5 +16,5 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.46.0
 pytest==8.3.4
-requests==2.31.1
+requests==2.32.3
 httpx==0.28.1
