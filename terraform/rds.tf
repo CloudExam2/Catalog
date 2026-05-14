@@ -1,4 +1,4 @@
-resource "aws_db_subnet_group" "catalog" {
+resource "aws_db_subnet_group" "catalogsvc" {
   name       = "catalog-db-subnet"
   subnet_ids = data.aws_subnets.default.ids
 
