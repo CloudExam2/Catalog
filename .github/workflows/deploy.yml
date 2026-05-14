@@ -83,11 +83,13 @@ jobs:
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest .
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
-      - name: Update EC2 via SSM
+      - name: Update EC2 via SSM (Synchronous)
         run: |
-          aws ssm send-command \
+          INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
+          # We send the command and capture the ID
+          CMD_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --instance-ids "${{ needs.provision.outputs.ec2_instance_id }}" \
+            --instance-ids "$INSTANCE_ID" \
             --parameters 'commands=[
               "docker stop catalog-app || true",
               "docker rm catalog-app || true",
@@ -95,10 +97,12 @@ jobs:
               "docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
               "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"${{ secrets.CATALOG_DATABASE_URL }}\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
             ]' \
-            --region ${{ env.AWS_REGION }}
+            --region ${{ env.AWS_REGION }} \
+            --output text --query "Command.CommandId")
+          
+          echo "Waiting for Docker deployment to finish..."
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
 
-  # GitHub-hosted runners are NOT inside your VPC: this cannot prove your laptop can reach PrivateLink.
-  # It only proves the app responds on the instance (same path SSM uses for automation).
   verify-in-vpc:
     needs: [provision, deploy]
     runs-on: ubuntu-latest
@@ -110,46 +114,28 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Wait for container after SSM deploy
-        run: sleep 45
+      - name: Wait for startup
+        run: sleep 20
 
-      - name: Curl Catalog on EC2 via SSM (in-VPC check)
+      - name: Curl Catalog & Debug Logs
         run: |
           set -euo pipefail
           INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
-          echo "Instance: $INSTANCE_ID"
+          
+          # We add 'docker ps' and 'docker logs' to see what happened if curl fails
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "CI verify Catalog HTTP on instance" \
-            --parameters '{"commands":["curl -fsS --max-time 20 http://127.0.0.1/"]}' \
+            --comment "Verify and Debug" \
+            --parameters '{"commands":["docker ps", "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app && exit 1)"]}' \
             --output text \
             --query "Command.CommandId")
-          echo "CommandId=$CMD_ID"
-          for i in $(seq 1 40); do
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$CMD_ID" \
-              --instance-id "$INSTANCE_ID" \
-              --query Status \
-              --output text 2>/dev/null || echo "Pending")
-            echo "poll $i: $STATUS"
-            if [ "$STATUS" = "Success" ]; then
-              echo "--- stdout ---"
-              aws ssm get-command-invocation \
-                --command-id "$CMD_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --query StandardOutputContent \
-                --output text
-              exit 0
-            fi
-            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ] || [ "$STATUS" = "Undeliverable" ]; then
-              aws ssm get-command-invocation \
-                --command-id "$CMD_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --output json
-              exit 1
-            fi
-            sleep 5
-          done
-          echo "Timeout waiting for SSM command success"
-          exit 1
+          
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
+          
+          # Show the result in GitHub logs
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
+            --output json
