@@ -31,8 +31,8 @@ resource "github_actions_secret" "ec2_instance_id" {
   plaintext_value = aws_instance.catalog_service.id
 }
 
-resource "github_actions_secret" "catalog_database_url" {
+resource "github_actions_secret" "database_url" {
   repository      = var.github_repo
-  secret_name     = "CATALOG_DATABASE_URL"
+  secret_name     = "DATABASE_URL"
   plaintext_value = "postgresql://catalogadmin:${var.db_password}@${aws_db_instance.catalog.address}:5432/catalogsvc"
 }

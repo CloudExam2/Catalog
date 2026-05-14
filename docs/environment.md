@@ -7,7 +7,7 @@ These are read by `.github/workflows/deploy.yml` and Terraform in this repo. The
 | Secret | Used for |
 | :--- | :--- |
 | **AWS_ACCESS_KEY_ID**, **AWS_SECRET_ACCESS_KEY**, **AWS_SESSION_TOKEN** | AWS API access from the workflow (Terraform, ECR, SSM). |
-| **GH_PAT** | GitHub provider in Terraform (e.g. writing `EC2_INSTANCE_ID`, `CATALOG_DATABASE_URL` to repo secrets). Needs appropriate repo scope. |
+| **GH_PAT** | GitHub provider in Terraform (e.g. writing `EC2_INSTANCE_ID`, `DATABASE_URL` to repo secrets). Needs appropriate repo scope. |
 | **DB_PASSWORD** | RDS PostgreSQL master password for **`catalog-postgres-core`**. Must satisfy **AWS rules** below. |
 
 ### `DB_PASSWORD` (RDS) — required shape
