@@ -84,7 +84,7 @@ jobs:
               "docker rm catalog-app || true",
               "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}",
               "docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
-              "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"${{ secrets.DATABASE_URL }}\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
+              "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"sqlite:////tmp/catalog.db\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
               "sleep 5",
               "docker ps -a",
               "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app && exit 1)"
