@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from database import engine, Base
+from .database import engine, Base
 from routers import clients, products, addresses
 
 # Generate tables (for local dev)
