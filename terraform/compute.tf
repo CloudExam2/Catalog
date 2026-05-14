@@ -14,6 +14,8 @@ resource "aws_instance" "catalog_service" {
               ACCOUNT_ID=${data.aws_caller_identity.current.account_id}
               aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.${var.aws_region}.amazonaws.com
               docker pull $ACCOUNT_ID.dkr.ecr.${var.aws_region}.amazonaws.com/catalog-service:latest || true
+              docker system prune -af || true
+              docker image prune -af || true
               docker stop catalog-app 2>/dev/null || true
               docker rm catalog-app 2>/dev/null || true
               docker run -d --name catalog-app -p 80:8000 \
