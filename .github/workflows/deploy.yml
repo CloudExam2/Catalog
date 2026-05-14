@@ -1,9 +1,10 @@
 name: Catalog Service CI/CD
 
 on:
+  # Actions → Catalog Service CI/CD → "Run workflow" (branch dropdown = target ref)
+  workflow_dispatch:
   push:
     branches: [main]
-  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
