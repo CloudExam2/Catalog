@@ -114,6 +114,16 @@ jobs:
             --output json
           exit 1 # Force the job to fail after showing logs
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
       - name: Verify Catalog public endpoint
         run: |
           echo "Testing Public IP: http://${{ needs.provision.outputs.catalog_public_ip }}/"
@@ -121,7 +131,7 @@ jobs:
 
       - name: Run Integration Tests
         run: |
-          pytest tests/test_integration.py
+          python -m pytest tests/test_integration.py
         env:
           BASE_URL: "http://${{ needs.provision.outputs.catalog_public_ip }}"
 
