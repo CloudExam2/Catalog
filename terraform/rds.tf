@@ -7,7 +7,7 @@ resource "aws_db_subnet_group" "catalog" {
   }
 }
 
-resource "aws_db_instance" "catalog" {
+resource "aws_db_instance" "catalogsvc" {
   identifier                 = "catalog-postgres"
   engine                     = "postgres"
   engine_version             = "16"
