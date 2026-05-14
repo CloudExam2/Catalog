@@ -6,8 +6,7 @@ from src.schemas import address as address_schema
 from src.repositories import AddressRepository
 
 router = APIRouter(
-    prefix="/addresses",
-    tags=["addresses"]
+    tags=["addresses"] # Remove prefix="/products"
 )
 
 @router.get("/", response_model=list[address_schema.AddressRead])

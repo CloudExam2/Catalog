@@ -6,8 +6,7 @@ from src.schemas import client as client_schema
 from src.repositories import ClientRepository
 
 router = APIRouter(
-    prefix="/clients",
-    tags=["clients"]
+    tags=["clients"] # Remove prefix="/products"
 )
 
 @router.get("/", response_model=list[client_schema.ClientRead])
