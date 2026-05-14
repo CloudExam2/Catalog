@@ -24,3 +24,14 @@ After changing the secret, re-run the workflow so Terraform applies with the new
 ## Terraform remote state (S3)
 
 Backend bucket and key are set in `terraform/providers.tf` (same pattern as other services). Core does **not** supply `DB_PASSWORD`; each service repo owns its own database secret.
+
+### Core VPC dependency
+
+Catalog Terraform reads **Core’s applied state** (`terraform/remote_state.tf` → S3 key `core/terraform.tfstate`) for **`vpc_id`** and **`public_subnet_ids`**.
+
+1. Run **Core** CI/CD (or `terraform apply` in Core) **first** so the VPC exists and outputs are written to that state file.
+2. Then run **Catalog** CI/CD. The IAM user used in GitHub Actions must be allowed to **`s3:GetObject`** on the state bucket for **both** `core/terraform.tfstate` and `catalog/terraform.tfstate`.
+
+### In-VPC health check job (Catalog workflow)
+
+The **verify-in-vpc** job runs **`curl http://127.0.0.1/`** on the EC2 instance **through SSM**. That proves the container responds **inside the VPC**. It does **not** validate your laptop’s browser path (GitHub runners are not in your VPC). To test from your machine without an IGW, use **SSM port forwarding** (see `catalog.md`).

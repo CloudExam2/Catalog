@@ -96,3 +96,60 @@ jobs:
               "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"${{ secrets.CATALOG_DATABASE_URL }}\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
             ]' \
             --region ${{ env.AWS_REGION }}
+
+  # GitHub-hosted runners are NOT inside your VPC: this cannot prove your laptop can reach PrivateLink.
+  # It only proves the app responds on the instance (same path SSM uses for automation).
+  verify-in-vpc:
+    needs: [provision, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for container after SSM deploy
+        run: sleep 45
+
+      - name: Curl Catalog on EC2 via SSM (in-VPC check)
+        run: |
+          set -euo pipefail
+          INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
+          echo "Instance: $INSTANCE_ID"
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "CI verify Catalog HTTP on instance" \
+            --parameters '{"commands":["curl -fsS --max-time 20 http://127.0.0.1/"]}' \
+            --output text \
+            --query "Command.CommandId")
+          echo "CommandId=$CMD_ID"
+          for i in $(seq 1 40); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$CMD_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query Status \
+              --output text 2>/dev/null || echo "Pending")
+            echo "poll $i: $STATUS"
+            if [ "$STATUS" = "Success" ]; then
+              echo "--- stdout ---"
+              aws ssm get-command-invocation \
+                --command-id "$CMD_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query StandardOutputContent \
+                --output text
+              exit 0
+            fi
+            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ] || [ "$STATUS" = "Undeliverable" ]; then
+              aws ssm get-command-invocation \
+                --command-id "$CMD_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --output json
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Timeout waiting for SSM command success"
+          exit 1
