@@ -13,9 +13,9 @@ if __name__ == "__main__":
 
 
 # Include Routers
-app.include_router(clients.router)
-app.include_router(products.router)
-app.include_router(addresses.router)
+app.include_router(products.router, prefix="/catalog", tags=["Catalog"])
+app.include_router(clients.router, prefix="/clients", tags=["Clients"])
+app.include_router(addresses.router, prefix="/addresses", tags=["Addresses"])
 
 @app.get("/")
 def health_check():
