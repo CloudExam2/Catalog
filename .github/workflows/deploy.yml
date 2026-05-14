@@ -116,6 +116,12 @@ jobs:
           echo "Testing Public IP: http://${{ needs.provision.outputs.catalog_public_ip }}/"
           curl -v -fsS --max-time 15 http://${{ needs.provision.outputs.catalog_public_ip }}/
 
+      - name: Run Integration Tests
+        run: |
+          pytest tests/test_integration.py
+        env:
+          BASE_URL: "http://${{ needs.provision.outputs.catalog_public_ip }}"
+
   verify-in-vpc:
     needs: [provision, deploy]
     runs-on: ubuntu-latest
