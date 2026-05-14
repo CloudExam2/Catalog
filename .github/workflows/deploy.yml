@@ -8,8 +8,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: catalog-service
-  # CHANGE THIS: Format is "YourGitHubUser/YourCoreRepoName"
-  CORE_REPO: "InakiMedinaM/CoreITESO" 
+  CORE_REPO: "CloudExam2/Catalog" 
 
 jobs:
   provision:
