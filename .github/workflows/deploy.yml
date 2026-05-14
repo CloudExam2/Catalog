@@ -74,6 +74,7 @@ jobs:
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
       - name: Update EC2 via SSM
+        id: ssm_update
         run: |
           INSTANCE_ID="${{ needs.provision.outputs.ec2_instance_id }}"
     
@@ -86,7 +87,7 @@ jobs:
               "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}",
               "docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
               "docker run -d --name catalog-app -p 80:8000 -e DATABASE_URL=\"sqlite:////tmp/catalog.db\" ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
-              "sleep 5",
+              "sleep 10",
               "docker ps -a",
               "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app && exit 1)"
             ]' \
@@ -94,17 +95,26 @@ jobs:
             --query "Command.CommandId" \
             --output text)
 
-          echo "Command ID: $COMMAND_ID. Waiting for execution to complete..."
-    
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-           --region ${{ env.AWS_REGION }}
-      
+          echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
+          echo "Waiting for Command $COMMAND_ID..."
+          
+          # Wait for execution. If it fails, we catch it in the next step.
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region ${{ env.AWS_REGION }} || echo "SSM_FAILED=true" >> $GITHUB_ENV
+
+      - name: Fetch SSM Logs on Failure
+        if: env.SSM_FAILED == 'true'
+        run: |
+          aws ssm get-command-invocation \
+            --command-id ${{ env.COMMAND_ID }} \
+            --instance-id "${{ needs.provision.outputs.ec2_instance_id }}" \
+            --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
+            --output json
+          exit 1 # Force the job to fail after showing logs
+
       - name: Verify Catalog public endpoint
         run: |
-          sleep 10
-          curl -fsS --max-time 10 http://${{ needs.provision.outputs.catalog_public_ip }}/
+          echo "Testing Public IP: http://${{ needs.provision.outputs.catalog_public_ip }}/"
+          curl -v -fsS --max-time 15 http://${{ needs.provision.outputs.catalog_public_ip }}/
 
   verify-in-vpc:
     needs: [provision, deploy]
