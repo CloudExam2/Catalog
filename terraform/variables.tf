@@ -20,27 +20,6 @@ variable "github_repo" {
   type        = string
 }
 
-variable "db_password" {
-  description = "Master password for the Catalog RDS PostgreSQL instance (AWS rules: 8-128 chars; no /, @, double-quote, or space)"
-  type        = string
-  sensitive   = true
-
-  validation {
-    condition     = length(var.db_password) >= 8 && length(var.db_password) <= 128
-    error_message = "RDS master password must be between 8 and 128 characters (set GitHub secret DB_PASSWORD in the Catalog repo)."
-  }
-
-  validation {
-    condition = (
-      !strcontains(var.db_password, "/") &&
-      !strcontains(var.db_password, "@") &&
-      !strcontains(var.db_password, "\"") &&
-      !strcontains(var.db_password, " ")
-    )
-    error_message = "RDS master password cannot contain /, @, a double-quote character, or spaces (AWS requirement for PostgreSQL)."
-  }
-}
-
 variable "catalog_backend_url" {
   description = "The URL for the Catalog backend service (e.g., http://IP:80). Set this to the Catalog EC2 instance's public IP after deployment. This is used by Core to proxy requests to Catalog."
   type        = string

@@ -2,12 +2,6 @@ resource "aws_security_group" "catalog_ec2" {
   name        = "catalog-service-ec2-sg"
   description = "Allow SSH and HTTP from your IP only (student lab; same pattern as Sales)"
   vpc_id      = data.terraform_remote_state.core.outputs.vpc_id
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   ingress {
     from_port   = 80
