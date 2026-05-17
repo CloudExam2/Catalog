@@ -1,9 +1,8 @@
 resource "aws_security_group" "catalog_ec2" {
-  name        = "catalog-service-ec2-sg"
+  name_prefix = "catalog-service-ec2-"
   description = "HTTP and SSH for lab console connect and browser access"
   vpc_id      = data.terraform_remote_state.core.outputs.vpc_id
 
-  # Lab EC2 Instance Connect / SSH uses port 22 — required for console Connect.
   ingress {
     from_port   = 22
     to_port     = 22
@@ -28,12 +27,17 @@ resource "aws_security_group" "catalog_ec2" {
   tags = {
     Name = "catalog-ec2-sg"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "catalog_rds" {
-  name        = "catalog-service-rds-sg"
+  name_prefix = "catalog-service-rds-"
   description = "PostgreSQL for Catalog - ingress only from Catalog EC2 SG"
   vpc_id      = data.terraform_remote_state.core.outputs.vpc_id
+
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -50,5 +54,9 @@ resource "aws_security_group" "catalog_rds" {
 
   tags = {
     Name = "catalog-rds-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
