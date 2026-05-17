@@ -1,6 +1,9 @@
-"""Fast checks that do not use RDS, SQS, or API Gateway — only the app process + local SQLite."""
+"""Smoke tests: quick health checks (no OpenAI — 'smoke' = shallow sanity test)."""
 
+import pytest
 from fastapi.testclient import TestClient
+
+pytestmark = pytest.mark.ephemeral
 
 
 def test_health_endpoint():
@@ -25,3 +28,4 @@ def test_openapi_available():
     assert spec.get("openapi")
     assert "paths" in spec
     assert "/clients/" in spec["paths"]
+    assert "/products/" in spec["paths"]

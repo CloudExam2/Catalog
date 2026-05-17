@@ -14,6 +14,32 @@ env:
   CORE_REPO: "CloudExam2/Core"
 
 jobs:
+  # Local pytest only (SQLite). Does not block deploy; failures are visible in the job log.
+  test-backend:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run ephemeral tests (no live EC2, no seed data)
+        env:
+          CI: "true"
+        run: python -m pytest tests/ -m ephemeral -v --tb=short
+
+      - name: Note on failures
+        if: failure()
+        run: |
+          echo "::warning::Backend ephemeral tests failed — deploy will continue. Fix tests before relying on the API."
+
   terraform:
     runs-on: ubuntu-latest
     outputs:
@@ -132,16 +158,6 @@ jobs:
             --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
             --output json
           exit 1
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Test Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
 
       - name: Verify Catalog public endpoint (from GitHub to EC2 public IP)
         run: |

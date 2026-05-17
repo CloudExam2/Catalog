@@ -1,6 +1,8 @@
-"""API tests using an isolated SQLite file (no AWS RDS)."""
+"""CRUD tests on in-memory SQLite; tables dropped after each test (no AWS, no leftover data)."""
 
 import pytest
+
+pytestmark = pytest.mark.ephemeral
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
