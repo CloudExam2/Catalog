@@ -4,6 +4,6 @@ output "ec2_instance_id" {
 }
 
 output "catalog_public_ip" {
-  description = "Public IP of the Catalog EC2 (direct HTTP tests until API Gateway exists)"
+  description = "Public IPv4 of Catalog EC2 (use with http:// below)"
   value       = aws_instance.catalog_service.public_ip
 }

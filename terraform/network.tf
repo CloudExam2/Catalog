@@ -1,7 +1,15 @@
 resource "aws_security_group" "catalog_ec2" {
   name        = "catalog-service-ec2-sg"
-  description = "Allow SSH and HTTP from your IP only (student lab; same pattern as Sales)"
+  description = "HTTP and SSH for lab console connect and browser access"
   vpc_id      = data.terraform_remote_state.core.outputs.vpc_id
+
+  # Lab EC2 Instance Connect / SSH uses port 22 — required for console Connect.
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   ingress {
     from_port   = 80

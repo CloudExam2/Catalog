@@ -71,6 +71,17 @@ jobs:
           docker build --no-cache -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest .
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
+      - name: Check instance is SSM-managed
+        run: |
+          echo "Instance: ${{ env.INSTANCE_ID }}"
+          aws ec2 describe-instances --instance-ids "${{ env.INSTANCE_ID }}" \
+            --query "Reservations[0].Instances[0].{State:State.Name,PublicIp:PublicIpAddress,Subnet:SubnetId}" \
+            --output table
+          aws ssm describe-instance-information \
+            --filters "Key=InstanceIds,Values=${{ env.INSTANCE_ID }}" \
+            --query "InstanceInformationList[0].{PingStatus:PingStatus,AgentVersion:AgentVersion}" \
+            --output table || echo "WARNING: instance not registered with SSM yet (wait a few minutes after first boot)"
+
       - name: Update EC2 via SSM
         id: ssm_update
         run: |
@@ -120,8 +131,15 @@ jobs:
 
       - name: Verify Catalog public endpoint
         run: |
-          echo "Testing Public IP: http://${{ needs.terraform.outputs.catalog_public_ip }}/"
-          curl -v -fsS --max-time 15 http://${{ needs.terraform.outputs.catalog_public_ip }}/
+          IP="${{ needs.terraform.outputs.catalog_public_ip }}"
+          echo "=========================================="
+          echo "Catalog URL: http://${IP}/"
+          echo "Swagger:     http://${IP}/docs"
+          echo "=========================================="
+          curl -v -fsS --max-time 15 "http://${IP}/" || {
+            echo "FAILED: no response on port 80. Check deploy SSM logs and EC2 security group."
+            exit 1
+          }
 
   verify-in-vpc:
     needs: [terraform, deploy]
