@@ -53,6 +53,20 @@ jobs:
         run: |
           echo "INSTANCE_ID=$(terraform output -raw ec2_instance_id)" >> $GITHUB_OUTPUT
           echo "CATALOG_IP=$(terraform output -raw catalog_public_ip)" >> $GITHUB_OUTPUT
+          IP=$(terraform output -raw catalog_public_ip)
+          {
+            echo "## Catalog EC2 (public internet via Core VPC + IGW)"
+            echo ""
+            echo "Use these from **your PC browser** (not \`127.0.0.1\` on your laptop — that is only the EC2 itself)."
+            echo ""
+            echo "| | URL |"
+            echo "|--|-----|"
+            echo "| Health | \`http://${IP}/\` |"
+            echo "| Swagger | \`http://${IP}/docs\` |"
+            echo "| Clients API | \`http://${IP}/clients/\` |"
+            echo ""
+            echo "**Instance ID:** \`$(terraform output -raw ec2_instance_id)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: [terraform]
@@ -129,17 +143,24 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Verify Catalog public endpoint
+      - name: Verify Catalog public endpoint (from GitHub to EC2 public IP)
         run: |
           IP="${{ needs.terraform.outputs.catalog_public_ip }}"
           echo "=========================================="
-          echo "Catalog URL: http://${IP}/"
-          echo "Swagger:     http://${IP}/docs"
+          echo "Catalog URL (open on YOUR PC): http://${IP}/"
+          echo "Swagger:                     http://${IP}/docs"
           echo "=========================================="
           curl -v -fsS --max-time 15 "http://${IP}/" || {
-            echo "FAILED: no response on port 80. Check deploy SSM logs and EC2 security group."
+            echo "FAILED: GitHub runner could not reach http://${IP}/ — check EC2 SG, public IP, and Core VPC IGW route."
             exit 1
           }
+          {
+            echo "## Catalog is reachable on the public IP"
+            echo ""
+            echo "Open on your computer: **http://${IP}/** and **http://${IP}/docs**"
+            echo ""
+            echo "Do **not** use \`http://127.0.0.1/\` on your PC — that is your laptop, not AWS."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   verify-in-vpc:
     needs: [terraform, deploy]

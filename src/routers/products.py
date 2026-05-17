@@ -6,7 +6,7 @@ from src.schemas import product as product_schema
 from src.repositories import ProductRepository
 
 router = APIRouter(
-    tags=["products"] # Remove prefix="/products"
+    tags=["products"] 
 )
 
 @router.get("/", response_model=list[product_schema.ProductRead])

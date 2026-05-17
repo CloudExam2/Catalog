@@ -8,7 +8,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Catalog Service")
 
 # Include Routers BEFORE the run block
-app.include_router(products.router, prefix="/catalog", tags=["Catalog"])
+app.include_router(products.router, prefix="/products", tags=["Products"])
 app.include_router(clients.router, prefix="/clients", tags=["Clients"])
 app.include_router(addresses.router, prefix="/addresses", tags=["Addresses"])
 
