@@ -5,9 +5,7 @@ from src.database import get_db
 from src.schemas import address as address_schema
 from src.repositories import AddressRepository
 
-router = APIRouter(
-    tags=["addresses"] # Remove prefix="/products"
-)
+router = APIRouter()
 
 @router.get("/", response_model=list[address_schema.AddressRead])
 def list_addresses(db: Session = Depends(get_db)):

@@ -5,9 +5,7 @@ from src.database import get_db
 from src.schemas import product as product_schema
 from src.repositories import ProductRepository
 
-router = APIRouter(
-    tags=["products"] 
-)
+router = APIRouter()
 
 @router.get("/", response_model=list[product_schema.ProductRead])
 def list_products(db: Session = Depends(get_db)):

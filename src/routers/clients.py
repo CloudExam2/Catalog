@@ -5,9 +5,7 @@ from src.database import get_db
 from src.schemas import client as client_schema
 from src.repositories import ClientRepository
 
-router = APIRouter(
-    tags=["clients"] # Remove prefix="/products"
-)
+router = APIRouter()
 
 @router.get("/", response_model=list[client_schema.ClientRead])
 def list_clients(db: Session = Depends(get_db)):
