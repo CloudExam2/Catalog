@@ -1,5 +1,9 @@
 from typing import List, Optional
+
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 import models
 
 class BaseRepository:
@@ -11,7 +15,11 @@ class ClientRepository(BaseRepository):
     def create(self, data: dict):
         obj = models.Client(**data)
         self.db.add(obj)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            raise HTTPException(status_code=409, detail="Client RFC already exists") from e
         self.db.refresh(obj)
         return obj
 
