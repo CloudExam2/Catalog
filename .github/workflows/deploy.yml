@@ -68,8 +68,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      # Replace EC2 each run so user_data (Docker bootstrap, CloudWatch agent) always re-runs.
+      # Remove -replace=... once agent config stabilizes; user_data_replace_on_change still replaces on user_data edits.
       - name: Terraform Plan
-        run: terraform plan -out=tfplan
+        run: terraform plan -replace=aws_instance.catalog_service -out=tfplan
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan

@@ -7,6 +7,8 @@ resource "aws_instance" "catalog_service" {
   iam_instance_profile   = "LabInstanceProfile"
   vpc_security_group_ids = [aws_security_group.catalog_ec2.id]
 
+  user_data_replace_on_change = true
+
   user_data = base64encode(templatefile("${path.module}/compute/user_data.sh.tpl", {
     aws_region        = var.aws_region
     account_id        = data.aws_caller_identity.current.account_id
@@ -26,6 +28,10 @@ resource "aws_instance" "catalog_service" {
   tags = {
     Name      = "Catalog-Service"
     ManagedBy = "terraform-catalog"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
