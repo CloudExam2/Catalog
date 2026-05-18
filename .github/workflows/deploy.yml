@@ -12,6 +12,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: catalog-service
   CORE_REPO: "CloudExam2/Core"
+  CATALOG_LOG_GROUP: /exam2/catalog
 
 jobs:
   # Local pytest only (SQLite). Does not block deploy; failures are visible in the job log.
@@ -133,10 +134,11 @@ jobs:
               "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}",
               "for i in 1 2 3 4 5; do docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest && break; echo pull attempt $i failed, retrying...; sleep 15; done",
               "docker rm -f catalog-app 2>/dev/null || true",
-              "docker run -d --name catalog-app -p 80:8000 ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
+              "docker run -d --name catalog-app -p 80:8000 --log-driver awslogs --log-opt awslogs-region=${{ env.AWS_REGION }} --log-opt awslogs-group=${{ env.CATALOG_LOG_GROUP }} --log-opt awslogs-stream=catalog-app ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest",
               "sleep 10",
               "docker ps -a",
-              "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app 2>&1; exit 1)"
+              "curl -fsS --max-time 10 http://127.0.0.1/ || (docker logs catalog-app 2>&1; exit 1)",
+              "curl -fsS --max-time 10 http://127.0.0.1/products/ || true"
             ]' \
             --region ${{ env.AWS_REGION }} \
             --query "Command.CommandId" \
@@ -177,6 +179,28 @@ jobs:
             echo ""
             echo "Open on your computer: **http://${IP}/** and **http://${IP}/docs**"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify CloudWatch log stream
+        run: |
+          sleep 20
+          STREAMS=$(aws logs describe-log-streams \
+            --log-group-name "${{ env.CATALOG_LOG_GROUP }}" \
+            --order-by LastEventTime \
+            --descending \
+            --limit 3 \
+            --query "logStreams[*].logStreamName" \
+            --output text 2>/dev/null || true)
+          echo "Log streams in ${{ env.CATALOG_LOG_GROUP }}: ${STREAMS:-none yet}"
+          if [ -z "$STREAMS" ] || [ "$STREAMS" = "None" ]; then
+            echo "::warning::No log streams — re-run Core CI (iam_logs.tf), then Catalog deploy. Check SSM output for awslogs errors."
+          else
+            aws logs get-log-events \
+              --log-group-name "${{ env.CATALOG_LOG_GROUP }}" \
+              --log-stream-name "catalog-app" \
+              --limit 5 \
+              --query "events[*].message" \
+              --output text 2>/dev/null || echo "(stream name may differ; open console → Log streams)"
+          fi
 
   verify-in-vpc:
     needs: [terraform, deploy]
