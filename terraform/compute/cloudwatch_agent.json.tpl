@@ -1,6 +1,6 @@
 {
   "agent": {
-    "metrics_collection_interval": 300,
+    "metrics_collection_interval": 60,
     "run_as_user": "root"
   },
   "metrics": {
@@ -8,11 +8,11 @@
     "metrics_collected": {
       "mem": {
         "measurement": ["mem_used_percent"],
-        "metrics_collection_interval": 300
+        "metrics_collection_interval": 60
       },
       "disk": {
         "measurement": ["used_percent"],
-        "metrics_collection_interval": 300,
+        "metrics_collection_interval": 60,
         "resources": ["/"],
         "ignore_file_system_types": ["tmpfs", "devtmpfs"]
       }

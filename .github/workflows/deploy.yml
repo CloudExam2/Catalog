@@ -178,6 +178,8 @@ jobs:
             echo "## Catalog is reachable on the public IP"
             echo ""
             echo "Open on your computer: **http://${IP}/** and **http://${IP}/docs**"
+            echo ""
+            echo "Logs → CloudWatch **\`${{ env.CATALOG_LOG_GROUP }}\`** (stream \`catalog-app\`). Filter inter-service: \`catalog.inbound\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify CloudWatch log stream
@@ -192,7 +194,7 @@ jobs:
             --output text 2>/dev/null || true)
           echo "Log streams in ${{ env.CATALOG_LOG_GROUP }}: ${STREAMS:-none yet}"
           if [ -z "$STREAMS" ] || [ "$STREAMS" = "None" ]; then
-            echo "::warning::No log streams — re-run Core CI (iam_logs.tf), then Catalog deploy. Check SSM output for awslogs errors."
+            echo "::warning::No log streams yet — re-run Core CI (creates /exam2/catalog), then Catalog deploy. Check SSM for awslogs errors."
           else
             aws logs get-log-events \
               --log-group-name "${{ env.CATALOG_LOG_GROUP }}" \
