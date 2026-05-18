@@ -1,4 +1,4 @@
-output "ec2_instance_id" {
+output "ec2_catalog_id" {
   description = "EC2 instance ID for SSM deploy and debugging"
   value       = aws_instance.catalog_service.id
 }

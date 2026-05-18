@@ -27,9 +27,9 @@ resource "aws_instance" "catalog_service" {
   }
 }
 
-resource "github_actions_secret" "ec2_instance_id" {
+resource "github_actions_secret" "ec2_catalog_id" {
   repository      = var.github_repo
-  secret_name     = "EC2_INSTANCE_ID"
+  secret_name     = "EC2_CATALOG_ID"
   plaintext_value = aws_instance.catalog_service.id
 }
 

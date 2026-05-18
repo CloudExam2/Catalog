@@ -43,7 +43,7 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     outputs:
-      ec2_instance_id: ${{ steps.set-outputs.outputs.INSTANCE_ID }}
+      ec2_catalog_id: ${{ steps.set-outputs.outputs.EC2_CATALOG_ID }}
       catalog_public_ip: ${{ steps.set-outputs.outputs.CATALOG_IP }}
     
     defaults:
@@ -77,28 +77,14 @@ jobs:
       - name: Export Infrastructure Data
         id: set-outputs
         run: |
-          echo "INSTANCE_ID=$(terraform output -raw ec2_instance_id)" >> $GITHUB_OUTPUT
+          echo "EC2_CATALOG_ID=$(terraform output -raw ec2_catalog_id)" >> $GITHUB_OUTPUT
           echo "CATALOG_IP=$(terraform output -raw catalog_public_ip)" >> $GITHUB_OUTPUT
-          IP=$(terraform output -raw catalog_public_ip)
-          {
-            echo "## Catalog EC2 (public internet via Core VPC + IGW)"
-            echo ""
-            echo "Use these from **your PC browser** (not \`127.0.0.1\` on your laptop — that is only the EC2 itself)."
-            echo ""
-            echo "| | URL |"
-            echo "|--|-----|"
-            echo "| Health | \`http://${IP}/\` |"
-            echo "| Swagger | \`http://${IP}/docs\` |"
-            echo "| Clients API | \`http://${IP}/clients/\` |"
-            echo ""
-            echo "**Instance ID:** \`$(terraform output -raw ec2_instance_id)\`"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: [terraform]
     runs-on: ubuntu-latest
     env:
-      INSTANCE_ID: ${{ needs.terraform.outputs.ec2_instance_id }}
+      INSTANCE_ID: ${{ needs.terraform.outputs.ec2_catalog_id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -163,7 +149,7 @@ jobs:
         run: |
           IP="${{ needs.terraform.outputs.catalog_public_ip }}"
           echo "=========================================="
-          echo "Catalog URL (open on YOUR PC): http://${IP}/"
+          echo "Catalog URL: http://${IP}/"
           echo "Swagger:                     http://${IP}/docs"
           echo "=========================================="
           curl -v -fsS --max-time 15 "http://${IP}/" || {
@@ -174,8 +160,6 @@ jobs:
             echo "## Catalog is reachable on the public IP"
             echo ""
             echo "Open on your computer: **http://${IP}/** and **http://${IP}/docs**"
-            echo ""
-            echo "Do **not** use \`http://127.0.0.1/\` on your PC — that is your laptop, not AWS."
           } >> "$GITHUB_STEP_SUMMARY"
 
   verify-in-vpc:
@@ -183,11 +167,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Wait for startup
         run: sleep 20
@@ -195,7 +174,7 @@ jobs:
       - name: Curl Catalog & Debug Logs
         run: |
           set -euo pipefail
-          INSTANCE_ID="${{ needs.terraform.outputs.ec2_instance_id }}"
+          INSTANCE_ID="${{ needs.terraform.outputs.ec2_catalog_id }}"
           
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
