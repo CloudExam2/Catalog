@@ -12,3 +12,8 @@ output "catalog_backend_url" {
   description = "Base URL written to Core CATALOG_BACKEND_URL"
   value       = "http://${aws_eip.catalog.public_ip}:80"
 }
+
+output "catalog_log_group_name" {
+  description = "CloudWatch log group for app access logs (from Core remote state)"
+  value       = data.terraform_remote_state.core.outputs.catalog_log_group_name
+}

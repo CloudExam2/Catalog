@@ -17,7 +17,9 @@ resource "aws_instance" "catalog_service" {
       ecr_repo   = "catalog-service"
     }))
     cloudwatch_script = indent(2, templatefile("${path.module}/compute/cloudwatch.sh.tpl", {
-      cw_config = file("${path.module}/compute/cloudwatch_agent.json")
+      cw_config = templatefile("${path.module}/compute/cloudwatch_agent.json.tpl", {
+        log_group_name = data.terraform_remote_state.core.outputs.catalog_log_group_name
+      })
     }))
   }))
 
