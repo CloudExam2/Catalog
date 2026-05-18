@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from src import models
+import models
 
 class BaseRepository:
     def __init__(self, db: Session):

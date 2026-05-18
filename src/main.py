@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from src.database import engine, Base
-from src.routers import clients, products, addresses
+from database import engine, Base
+from routers import clients, products, addresses
 
 # Generate tables (for local dev)
 Base.metadata.create_all(bind=engine)
