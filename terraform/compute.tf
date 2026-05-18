@@ -23,8 +23,22 @@ resource "aws_instance" "catalog_service" {
               EOF
 
   tags = {
-    Name = "Catalog-Service"
+    Name      = "Catalog-Service"
+    ManagedBy = "terraform-catalog"
   }
+}
+
+resource "aws_eip" "catalog" {
+  domain = "vpc"
+  tags = {
+    Name      = "catalog-service-eip"
+    ManagedBy = "terraform-catalog"
+  }
+}
+
+resource "aws_eip_association" "catalog" {
+  instance_id   = aws_instance.catalog_service.id
+  allocation_id = aws_eip.catalog.id
 }
 
 resource "github_actions_secret" "ec2_catalog_id" {
@@ -37,5 +51,5 @@ resource "github_actions_variable" "catalog_url_for_core" {
   provider      = github.core
   repository    = "Core"
   variable_name = "CATALOG_BACKEND_URL"
-  value         = "http://${aws_instance.catalog_service.public_ip}:80"
+  value         = "http://${aws_eip.catalog.public_ip}:80"
 }
