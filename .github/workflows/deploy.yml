@@ -78,7 +78,19 @@ jobs:
         id: set-outputs
         run: |
           echo "EC2_CATALOG_ID=$(terraform output -raw ec2_catalog_id)" >> $GITHUB_OUTPUT
-          echo "CATALOG_IP=$(terraform output -raw catalog_public_ip)" >> $GITHUB_OUTPUT
+          IP=$(terraform output -raw catalog_public_ip)
+          echo "CATALOG_IP=${IP}" >> $GITHUB_OUTPUT
+          {
+            echo "## Catalog — Elastic IP (stable URL)"
+            echo ""
+            echo "| | URL |"
+            echo "|--|-----|"
+            echo "| Health | http://${IP}/ |"
+            echo "| Swagger | http://${IP}/docs |"
+            echo "| Clients | http://${IP}/clients/ |"
+            echo ""
+            echo "Also updates Core repo variable \`CATALOG_BACKEND_URL\` → \`http://${IP}:80\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: [terraform]
