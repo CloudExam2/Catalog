@@ -1,4 +1,8 @@
-"""Shared helpers for seed/clear scripts (live Catalog server over HTTP)."""
+"""Shared helpers for seed/clear scripts (live Catalog server over HTTP).
+
+Clients, addresses and products are independent entities; a sale (in Sales)
+picks ids from each list.
+"""
 
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -48,88 +52,121 @@ def _check_reachable(base_url: str) -> None:
         raise RuntimeError(f"Catalog not reachable at {base_url} (status {r.status_code})")
 
 
-def seed_catalog(base_url: str | None = None) -> None:
+# Demo data — three independent buyers, two addresses per buyer (FAC + ENV),
+# plus a flat catalog of products with no owner.
+DEMO_CLIENTS = [
+    {"rfc": "BUYRONE12345", "razon_social": "Buyer One Corp", "email": "one@buyer.test"},
+    {"rfc": "BUYRTWO12345", "razon_social": "Buyer Two Corp", "email": "two@buyer.test"},
+    {"rfc": "BUYRTHREE123", "razon_social": "Buyer Three Corp", "email": "three@buyer.test"},
+]
+
+DEMO_PRODUCTS = [
+    {"name": "Industrial Copper Sulfate", "unit": "kg", "base_price": 45.50},
+    {"name": "Potassium Permanganate", "unit": "kg", "base_price": 32.00},
+    {"name": "ITESO Lab Flask", "unit": "unit", "base_price": 15.00},
+    {"name": "Sodium Chloride", "unit": "kg", "base_price": 5.25},
+    {"name": "Distilled Water", "unit": "L", "base_price": 8.00},
+]
+
+
+def _addresses_for(client_idx: int) -> list[dict]:
+    return [
+        {
+            "domicilio": f"Av. Vallarta {100 + client_idx}",
+            "colonia": "Centro",
+            "municipio": "Guadalajara",
+            "estado": "Jalisco",
+            "address_type": "FACTURACIÓN",
+        },
+        {
+            "domicilio": f"Av. Patria {200 + client_idx}",
+            "colonia": "Providencia",
+            "municipio": "Guadalajara",
+            "estado": "Jalisco",
+            "address_type": "ENVÍO",
+        },
+    ]
+
+
+def seed_catalog(base_url: str | None = None) -> dict:
+    """Create clients, addresses (2 per client) and products. Returns ids for callers."""
     base_url = (base_url or get_base_url()).rstrip("/")
     _check_reachable(base_url)
 
-    seller = requests.post(
-        f"{base_url}/clients/",
-        json={
-            "rfc": "SEEDSELLER123",
-            "razon_social": "Seed Seller Corp",
-            "email": "seed@seller.test",
-            "telefono": "1234567890",
-            "comercial_name": "Seed Seller Corp",
-        },
-        timeout=15,
-    )
-    if seller.status_code != 200:
-        raise RuntimeError(f"Create seller failed: {seller.status_code} {seller.text}")
-    seller_id = seller.json()["id"]
-
-    products = [
-        {"name": "Industrial Copper Sulfate", "unit": "kg", "base_price": 45.50, "client_id": seller_id},
-        {"name": "Potassium Permanganate", "unit": "kg", "base_price": 32.00, "client_id": seller_id},
-        {"name": "ITESO Lab Flask", "unit": "unit", "base_price": 15.00, "client_id": seller_id},
-    ]
-
-    created_ids = []
-    for item in products:
-        res = requests.post(f"{base_url}/products/", json=item, timeout=15)
+    client_ids: list[int] = []
+    for body in DEMO_CLIENTS:
+        res = requests.post(f"{base_url}/clients/", json=body, timeout=15)
         if res.status_code != 200:
-            raise RuntimeError(f"Create product {item['name']} failed: {res.status_code} {res.text}")
-        created_ids.append(res.json()["id"])
+            raise RuntimeError(f"Create client {body['rfc']} failed: {res.status_code} {res.text}")
+        client_ids.append(res.json()["id"])
+
+    address_ids: list[tuple[int, int]] = []  # (fac_id, env_id) per client
+    for idx, _cid in enumerate(client_ids):
+        fac, env = _addresses_for(idx)
+        fac_res = requests.post(f"{base_url}/addresses/", json=fac, timeout=15)
+        env_res = requests.post(f"{base_url}/addresses/", json=env, timeout=15)
+        for r in (fac_res, env_res):
+            if r.status_code != 200:
+                raise RuntimeError(f"Create address failed: {r.status_code} {r.text}")
+        address_ids.append((fac_res.json()["id"], env_res.json()["id"]))
+
+    product_ids: list[int] = []
+    for body in DEMO_PRODUCTS:
+        res = requests.post(f"{base_url}/products/", json=body, timeout=15)
+        if res.status_code != 200:
+            raise RuntimeError(f"Create product {body['name']} failed: {res.status_code} {res.text}")
+        product_ids.append(res.json()["id"])
 
     print(f"Seeded at {base_url}")
-    print(f"  seller client_id={seller_id}")
-    print(f"  product_ids={created_ids}")
-    print("  products:", ", ".join(p["name"] for p in products))
+    print(f"  client_ids  = {client_ids}")
+    print(f"  address_ids = {address_ids}  # [(fac, env), ...] per client")
+    print(f"  product_ids = {product_ids}")
+
+    return {
+        "client_ids": client_ids,
+        "address_ids": address_ids,
+        "product_ids": product_ids,
+    }
+
+
+def _delete_all(base_url: str, path: str) -> int:
+    items = requests.get(f"{base_url}{path}", timeout=15).json()
+    deleted = 0
+    for row in items:
+        r = requests.delete(f"{base_url}{path}{row['id']}", timeout=15)
+        if r.status_code == 200:
+            deleted += 1
+    return deleted
 
 
 def clear_catalog(base_url: str | None = None) -> None:
-    """Delete all clients (products and addresses cascade via the API/ORM)."""
+    """Delete every client, address and product (each list is independent)."""
     base_url = (base_url or get_base_url()).rstrip("/")
     _check_reachable(base_url)
 
-    clients = requests.get(f"{base_url}/clients/", timeout=15)
-    if clients.status_code != 200:
-        raise RuntimeError(f"List clients failed: {clients.status_code} {clients.text}")
-
-    deleted_clients = 0
-    for row in clients.json():
-        r = requests.delete(f"{base_url}/clients/{row['id']}", timeout=15)
-        if r.status_code == 200:
-            deleted_clients += 1
-
-    products = requests.get(f"{base_url}/products/", timeout=15).json()
-    addresses = requests.get(f"{base_url}/addresses/", timeout=15).json()
+    deleted_clients = _delete_all(base_url, "/clients/")
+    deleted_products = _delete_all(base_url, "/products/")
+    deleted_addresses = _delete_all(base_url, "/addresses/")
 
     print(f"Cleared at {base_url}")
-    print(f"  deleted clients: {deleted_clients}")
-    print(f"  products remaining: {len(products)}")
-    print(f"  addresses remaining: {len(addresses)}")
+    print(f"  deleted clients:   {deleted_clients}")
+    print(f"  deleted products:  {deleted_products}")
+    print(f"  deleted addresses: {deleted_addresses}")
 
 
 def load_test_then_clear(base_url: str | None = None) -> None:
-    """
-    Create many clients/products, hammer the API (raises EC2 CPU), then clear all data.
-    Tune with env: LOAD_CLIENTS, LOAD_PRODUCTS_PER_CLIENT, LOAD_HTTP_ROUNDS, LOAD_WORKERS.
-    """
+    """Create many independent clients/products + parallel GETs to raise CPU, then clear."""
     base_url = (base_url or get_base_url()).rstrip("/")
     num_clients = _env_int("LOAD_CLIENTS", 25)
-    products_per_client = _env_int("LOAD_PRODUCTS_PER_CLIENT", 8)
+    num_products = _env_int("LOAD_PRODUCTS_PER_CLIENT", 8) * num_clients
     http_rounds = _env_int("LOAD_HTTP_ROUNDS", 400)
     workers = _env_int("LOAD_WORKERS", 16)
 
     _check_reachable(base_url)
     print(f"Load test at {base_url}")
-    print(
-        f"  clients={num_clients}, products/client={products_per_client}, "
-        f"http_rounds={http_rounds}, workers={workers}"
-    )
+    print(f"  clients={num_clients}, products={num_products}, http_rounds={http_rounds}, workers={workers}")
     print("  Watch EC2 CPU in CloudWatch (AWS/EC2 → your instance id) for 1–5 min.")
 
-    client_ids: list[int] = []
     for i in range(num_clients):
         res = requests.post(
             f"{base_url}/clients/",
@@ -142,26 +179,17 @@ def load_test_then_clear(base_url: str | None = None) -> None:
         )
         if res.status_code != 200:
             raise RuntimeError(f"Client {i} failed: {res.status_code} {res.text}")
-        client_ids.append(res.json()["id"])
 
-    product_count = 0
-    for cid in client_ids:
-        for p in range(products_per_client):
-            res = requests.post(
-                f"{base_url}/products/",
-                json={
-                    "name": f"Load product {cid}-{p}",
-                    "unit": "kg",
-                    "base_price": 10.0 + (p % 50),
-                    "client_id": cid,
-                },
-                timeout=30,
-            )
-            if res.status_code != 200:
-                raise RuntimeError(f"Product failed: {res.status_code} {res.text}")
-            product_count += 1
+    for i in range(num_products):
+        res = requests.post(
+            f"{base_url}/products/",
+            json={"name": f"Load product {i}", "unit": "kg", "base_price": 10.0 + (i % 50)},
+            timeout=30,
+        )
+        if res.status_code != 200:
+            raise RuntimeError(f"Product {i} failed: {res.status_code} {res.text}")
 
-    print(f"  inserted {len(client_ids)} clients, {product_count} products")
+    print(f"  inserted {num_clients} clients, {num_products} products")
     print(f"  HTTP stress ({http_rounds} rounds, {workers} workers)...")
 
     def _one_round(_: int) -> None:

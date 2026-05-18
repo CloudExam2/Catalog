@@ -1,11 +1,10 @@
--- 1. DROP CHILD TABLES FIRST (Prevents dependency errors)
+-- Reference schema (Catalog: clients, addresses, products are independent flat entities).
+-- The running app uses SQLAlchemy `Base.metadata.create_all` — this file is only documentation.
+
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS addresses;
-
--- 2. DROP PARENT TABLE LAST
 DROP TABLE IF EXISTS clients;
 
--- 3. CREATE CLIENTS
 CREATE TABLE clients (
     id SERIAL PRIMARY KEY,
     rfc VARCHAR(13) NOT NULL UNIQUE,
@@ -15,24 +14,19 @@ CREATE TABLE clients (
     telefono VARCHAR(20)
 );
 
--- 4. CREATE ADDRESSES (Linked to Client)
 CREATE TABLE addresses (
     id SERIAL PRIMARY KEY,
-    client_id INTEGER NOT NULL,
     domicilio TEXT NOT NULL,
     colonia VARCHAR(100),
     municipio VARCHAR(100),
     estado VARCHAR(100),
-    CONSTRAINT chk_address_type CHECK (address_type IN ('FACTURACIÓN', 'ENVÍO')),
-    CONSTRAINT fk_client_address FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+    address_type VARCHAR(20) NOT NULL,
+    CONSTRAINT chk_address_type CHECK (address_type IN ('FACTURACIÓN', 'ENVÍO'))
 );
 
--- 5. CREATE PRODUCTS (Linked to Client/Seller)
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
-    seller_id INTEGER NOT NULL,
     name VARCHAR(255) NOT NULL,
     unit VARCHAR(50),
-    base_price NUMERIC(10,2) NOT NULL,
-    CONSTRAINT fk_seller_product FOREIGN KEY (seller_id) REFERENCES clients(id) ON DELETE CASCADE
+    base_price NUMERIC(10,2) NOT NULL
 );
