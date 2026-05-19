@@ -139,10 +139,38 @@ def _delete_all(base_url: str, path: str) -> int:
     return deleted
 
 
-def clear_catalog(base_url: str | None = None) -> None:
+def emit_catalog_http_errors(base_url: str | None = None, reps: int | None = None) -> None:
+    """
+    Send 404 / 422 / 500 traffic so CloudWatch HTTP % widgets move off 100% 2xx.
+    Log filters: catalog.inbound status=404|422|500 (see Core/logs_http_metrics.tf).
+    """
+    base_url = (base_url or get_base_url()).rstrip("/")
+    reps = reps if reps is not None else _env_int("LOAD_ERROR_REPS", 40)
+    print(f"  HTTP error traffic @ {base_url} ({reps} rounds each pattern)...")
+
+    for _ in range(reps):
+        requests.get(f"{base_url}/clients/999999999", timeout=15)
+        requests.get(f"{base_url}/products/888888888", timeout=15)
+        requests.get(f"{base_url}/addresses/777777777", timeout=15)
+        requests.post(f"{base_url}/clients/", json={"rfc": "BAD"}, timeout=15)
+        requests.post(
+            f"{base_url}/products/",
+            json={"name": "incomplete"},
+            timeout=15,
+        )
+        requests.put(
+            f"{base_url}/clients/999999999",
+            json={"razon_social": "missing client"},
+            timeout=15,
+        )
+
+
+def clear_catalog(base_url: str | None = None, *, emit_errors: bool = True) -> None:
     """Delete every client, address and product (each list is independent)."""
     base_url = (base_url or get_base_url()).rstrip("/")
     _check_reachable(base_url)
+    if emit_errors:
+        emit_catalog_http_errors(base_url)
 
     deleted_clients = _delete_all(base_url, "/clients/")
     deleted_products = _delete_all(base_url, "/products/")
@@ -206,6 +234,8 @@ def load_test_then_clear(base_url: str | None = None) -> None:
             if done % 50 == 0:
                 print(f"    ... {done}/{http_rounds} rounds")
 
-    print("  stress done — clearing all catalog data...")
-    clear_catalog(base_url)
+    print("  stress done.")
+    emit_catalog_http_errors(base_url)
+    print("  clearing all catalog data...")
+    clear_catalog(base_url, emit_errors=False)
     print("  load test finished (data cleared).")

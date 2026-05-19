@@ -8,7 +8,7 @@ Uses BASE_URL from .env (Catalog/.env) or environment variable.
 
 Or: pytest tests/test_load_then_clear.py -v
 
-Does NOT run in CI. Watch CloudWatch → EC2 → CPUUtilization for your instance.
+Does NOT run in CI. Ends with 404/422/500 traffic for HTTP % widgets, then clears data.
 """
 
 import pytest
