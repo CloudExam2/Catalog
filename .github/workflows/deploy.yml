@@ -69,7 +69,7 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # Replace EC2 each run so user_data (Docker bootstrap, CloudWatch agent) always re-runs.
+      # Replace EC2 each run so user_data (Docker bootstrap) always re-runs.
       # Remove -replace=... once agent config stabilizes; user_data_replace_on_change still replaces on user_data edits.
       - name: Terraform Plan
         run: terraform plan -replace=aws_instance.catalog_service -out=tfplan
@@ -181,20 +181,6 @@ jobs:
             echo ""
             echo "Logs → CloudWatch **\`${{ env.CATALOG_LOG_GROUP }}\`** (stream \`catalog-app\`). Filter inter-service: \`catalog.inbound\`"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Restart CloudWatch agent (metrics mem/disk)
-        run: |
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "${{ env.INSTANCE_ID }}" \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=[
-              "sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json || true",
-              "sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status"
-            ]' \
-            --query "Command.CommandId" --output text)
-          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ env.INSTANCE_ID }}" || true
-          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ env.INSTANCE_ID }}" \
-            --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" --output json
 
       - name: Verify CloudWatch log stream
         run: |
