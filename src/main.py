@@ -1,6 +1,8 @@
 import logging
 import time
 
+#write a comment
+
 from fastapi import FastAPI, Request
 from database import engine, Base
 from routers import clients, products, addresses
